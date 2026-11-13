@@ -167,7 +167,7 @@ namespace Agent
                     FormBorderStyle = FormBorderStyle.None,
                     WindowState = FormWindowState.Maximized,
                     TopMost = true,
-                    BackColor = Color.Black,
+                    BackColor = System.Drawing.Color.Black,
                     ShowInTaskbar = false // Скрываем из панели задач
                 };
                 var pb = new PictureBox { Image = Image.FromFile(path), SizeMode = PictureBoxSizeMode.Zoom, Dock = DockStyle.Fill };
