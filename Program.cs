@@ -194,7 +194,7 @@ namespace Agent
         {
             var b = Screen.PrimaryScreen!.Bounds;
             using var bmp = new Bitmap(b.Width, b.Height);
-            using (var g = Graphics.FromImage(bmp)) g.CopyFromScreen(Point.Empty, Point.Empty, b.Size);
+            using (var g = Graphics.FromImage(bmp)) g.CopyFromScreen(System.Drawing.Point.Empty, System.Drawing.Point.Empty, b.Size);
             using var ms = new MemoryStream();
             bmp.Save(ms, ImageFormat.Png);
             return ms.ToArray();
