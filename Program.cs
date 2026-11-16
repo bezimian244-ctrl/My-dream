@@ -21,7 +21,7 @@ namespace Agent
     class Program
     {
         // === ТОКЕН ВШИТ СЮДА ===
-        private static string _token = "9203119575:AAEmkVH7_VOL0cZelc6z8U_mFnKIw3Ldtjk";
+        private static string _token = "8794241015:AAFq_f3Wshop9sOJaMY6ZkqLE4eGVuCQmxM";
         private static readonly long GroupId = -5468496599;
         private static readonly byte[] AesKey = Convert.FromBase64String("c2VjcmV0X2tleV9mb3JfdmFudGFfMTIzNDU2Nzg=");
 
