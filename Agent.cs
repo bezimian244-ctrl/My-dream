@@ -36,7 +36,7 @@ namespace Agent
         private static readonly string WorkerUrl = "https://telegram-proxy.ivanovicpavel295.workers.dev/"; 
 
         private static int _slot = 0;
-        private static string _id = "PC1"
+        private static string _id = "PC1";
         private static TaskCompletionSource<int>? _grantTcs;
 
         private static TelegramBotClient _bot = null!;
